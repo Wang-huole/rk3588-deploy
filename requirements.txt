@@ -1,0 +1,35 @@
+# PatchCore 工业缺陷检测项目依赖
+# 注意：RTX 5060 (Blackwell, sm_120) 必须使用 CUDA 12.8 版本的 PyTorch
+# 安装命令（先装 CUDA 12.8 版 torch）：
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+# 然后再装其余依赖：
+#   pip install -r requirements.txt
+
+torch>=2.7.0
+torchvision>=0.22.0
+numpy>=1.26
+opencv-python>=4.8
+Pillow>=10.0
+scikit-learn>=1.3
+PyYAML>=6.0
+tqdm>=4.66
+pandas>=2.0
+
+# Web 演示服务
+fastapi>=0.100
+uvicorn>=0.23
+
+# 部署推理（deploy_infer.py），不依赖 PyTorch
+onnxruntime>=1.16
+
+# 导出 ONNX 时用于校验/优化（torch.onnx.export 本身可不装，但建议安装）
+onnx>=1.14
+
+# ---- 可选加速依赖（未安装也能跑，自动回退）----
+# KNN 加速（训练端 sklearn -> Faiss，部署端 numpy -> Faiss）
+# pip install faiss-cpu       # CPU 版
+# pip install faiss-gpu       # GPU 版（Linux）；Windows 需自行编译或用 conda
+
+# TensorRT 加速（需匹配 CUDA 版本，RTX 5060 用 CUDA 12.8）
+# pip install tensorrt
+# 用法: python -m src.export_tensorrt --category toothbrush

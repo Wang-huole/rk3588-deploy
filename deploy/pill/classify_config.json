@@ -1,0 +1,45 @@
+{
+  "category": "pill",
+  "classes": [
+    "good",
+    "color",
+    "combined",
+    "contamination",
+    "crack",
+    "faulty_imprint",
+    "pill_type",
+    "scratch"
+  ],
+  "class_zh": {
+    "good": "正常",
+    "color": "颜色异常",
+    "combined": "复合缺陷",
+    "contamination": "污染",
+    "crack": "裂纹",
+    "faulty_imprint": "刻印错误",
+    "pill_type": "药品类型错误",
+    "scratch": "划痕"
+  },
+  "image_size": 384,
+  "in_channels": 4,
+  "amap_mean": 0.598147451877594,
+  "amap_std": 0.027955438941717148,
+  "files": [
+    "classify_fold0.onnx",
+    "classify_fold1.onnx",
+    "classify_fold2.onnx",
+    "classify_fold3.onnx",
+    "classify_fold4.onnx"
+  ],
+  "cv_accuracy_mean": 0.8775,
+  "cv_accuracy_std": 0.0338,
+  "cv_fold_accuracies": [
+    0.878,
+    0.9024,
+    0.8415,
+    0.9259,
+    0.8395
+  ],
+  "trained_at": "2026-11-11T11:31:04",
+  "note": "输入为 4 通道：RGB(3, ImageNet 归一化) + PatchCore 异常图(1)。两阶段串联：PatchCore 先判是否缺陷，判为缺陷时才用本模型细分类型。"
+}

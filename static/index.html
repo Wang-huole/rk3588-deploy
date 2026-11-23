@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PatchCore 实时缺陷检测</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --dim: #8b949e;
+    --ok: #3fb950; --bad: #f85149; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .model-status { font-size: 12px; color: var(--dim); }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #6e7681; }
+  .status-dot.on { background: var(--ok); }
+  .status-dot.err { background: var(--bad); }
+
+  .layout {
+    display: grid; grid-template-columns: 320px 1fr; gap: 16px;
+    padding: 16px 24px; max-width: 1400px; margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 14px; margin-bottom: 12px; color: var(--dim); font-weight: 600; }
+
+  label { display: block; font-size: 12px; color: var(--dim); margin: 10px 0 4px; }
+  select, input[type=number] {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px;
+  }
+  select:focus, input:focus { outline: 1px solid var(--accent); }
+
+  .btn {
+    width: 100%; padding: 9px 0; margin-top: 10px;
+    border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+    background: #21262d; color: var(--text); font-size: 13px; font-weight: 500;
+    transition: background .15s;
+  }
+  .btn:hover { background: #30363d; }
+  .btn.primary { background: #1f6feb; border-color: #1f6feb; }
+  .btn.primary:hover { background: #388bfd; }
+  /* 上传图片检测：深绿色 + 尺寸缩小 */
+  .btn.green { background: #1a7a3c; border-color: #1a7a3c; color: #fff; padding: 6px 0; font-size: 12px; }
+  .btn.green:hover { background: #228b46; }
+  .btn.green.active { box-shadow: 0 0 0 2px rgba(26,122,60,.45); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .switch-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .switch-row span { font-size: 13px; }
+  .switch { position: relative; width: 40px; height: 22px; }
+  .switch input { display: none; }
+  .slider {
+    position: absolute; inset: 0; background: #30363d; border-radius: 22px; cursor: pointer; transition: .2s;
+  }
+  .slider::before {
+    content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+    background: #8b949e; border-radius: 50%; transition: .2s;
+  }
+  .switch input:checked + .slider { background: #1f6feb; }
+  .switch input:checked + .slider::before { transform: translateX(18px); background: #fff; }
+
+  .display { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .display figure { margin: 0; position: relative; }
+  .display img, .display video {
+    width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+    background: #000; border-radius: 8px; border: 1px solid var(--border);
+  }
+  .display figcaption { font-size: 12px; color: var(--dim); text-align: center; margin-top: 6px; }
+
+  .result-badge {
+    position: absolute; top: 10px; left: 10px; padding: 6px 14px; border-radius: 6px;
+    font-size: 15px; font-weight: 700; color: #fff;
+  }
+  .badge-ok { background: var(--ok); }
+  .badge-bad { background: var(--bad); }
+
+  .score-box {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px;
+  }
+  .score-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .score-item .k { font-size: 11px; color: var(--dim); }
+  .score-item .v { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .score-item .v.ok { color: var(--ok); } .score-item .v.bad { color: var(--bad); }
+
+  .history { max-height: 320px; overflow-y: auto; }
+  .hist-item {
+    display: flex; align-items: center; gap: 10px; padding: 6px 4px;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .hist-item img { width: 52px; height: 52px; object-fit: cover; border-radius: 4px; }
+  .hist-item .name { flex: 1; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-item .score { font-variant-numeric: tabular-nums; }
+  .tag { padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; color: #fff; }
+
+  .hint { font-size: 11px; color: var(--dim); margin-top: 8px; line-height: 1.6; }
+  .drop-hint {
+    border: 1px dashed var(--border); border-radius: 8px; padding: 14px;
+    text-align: center; color: var(--dim); font-size: 12px; margin-top: 10px;
+  }
+  .drop-hint.drag { border-color: var(--accent); color: var(--accent); }
+  #fileInput { display: none; }
+  .busy-overlay { color: var(--accent); font-size: 12px; margin-top: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PatchCore 实时缺陷检测</h1>
+  <div class="model-status">
+    <span class="status-dot" id="statusDot"></span><span id="statusText">加载模型中…</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 左侧控制 -->
+  <div>
+    <div class="panel">
+      <h2>检测设置</h2>
+      <label>模型类别</label>
+      <select id="category"></select>
+
+      <label>判定阈值（score &gt; 阈值 = 缺陷）</label>
+      <input type="number" id="threshold" step="0.01" min="0" max="2">
+      <div class="hint" id="thresholdHint"></div>
+    </div>
+
+    <div class="panel">
+      <h2>输入模式</h2>
+      <button class="btn" id="modeCamera" disabled>摄像头实时检测</button>
+      <button class="btn green" id="modeUpload" disabled>上传图片检测</button>
+
+      <div id="cameraBox" style="display:none">
+        <div class="switch-row">
+          <span>自动检测</span>
+          <label class="switch"><input type="checkbox" id="autoDetect"><span class="slider"></span></label>
+        </div>
+        <label>检测间隔（秒）</label>
+        <input type="number" id="interval" value="2" step="0.5" min="1">
+        <button class="btn" id="snapBtn">检测当前帧</button>
+        <div class="hint">自动检测会按间隔截取摄像头画面逐帧推理；推理约 1 秒/帧，间隔请勿小于 1 秒。</div>
+      </div>
+
+      <div id="uploadBox" style="display:none">
+        <button class="btn" id="pickBtn">选择图片文件</button>
+        <input type="file" id="fileInput" accept="image/*">
+        <div class="drop-hint" id="dropHint">或将图片拖到此处<br>支持 JPG / PNG</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>最近检测</h2>
+      <div class="history" id="history">
+        <div class="hint">暂无记录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧显示 -->
+  <div>
+    <div class="panel">
+      <h2>检测结果</h2>
+      <div class="display">
+        <figure>
+          <video id="video" autoplay playsinline muted style="display:none"></video>
+          <img id="imgSrc" alt="输入画面" style="display:none">
+          <div class="result-badge badge-ok" id="badge" style="display:none">正常</div>
+          <figcaption>输入画面</figcaption>
+        </figure>
+        <figure>
+          <img id="imgVis" alt="检测热力图" style="display:none">
+          <figcaption>检测热力图</figcaption>
+        </figure>
+      </div>
+
+      <div class="score-box">
+        <div class="score-item"><div class="k">异常分数</div><div class="v" id="score">—</div></div>
+        <div class="score-item"><div class="k">判定结果</div><div class="v" id="verdict">—</div></div>
+        <div class="score-item"><div class="k">推理耗时</div><div class="v" id="latency">—</div></div>
+        <div class="score-item"><div class="k">缺陷类型</div><div class="v" id="defectType" style="font-size:15px">—</div><div class="k" id="defectNote" style="font-size:10px;margin-top:2px"></div></div>
+        <div class="score-item"><div class="k">样品尺寸</div><div class="v" id="size" style="font-size:14px">—</div><div class="k" id="sizeNote" style="font-size:10px;margin-top:2px"></div></div>
+      </div>
+      <div class="hint" style="margin-top:10px">缺陷类型优先由<span style="color:var(--accent)">训练分类模型</span>给出（两阶段：PatchCore 先判是否缺陷 → 分类器细分类型；分类器缺失时回退启发式规则）：good 正常 / color 颜色异常 / combined 复合缺陷 / contamination 污染 / crack 裂纹 / faulty_imprint 刻印错误 / pill_type 药品类型错误 / scratch 划痕</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn" id="reportBtn" style="width:auto;padding:7px 16px;margin-top:0" disabled>导出检测报告</button>
+        <span class="hint" id="reportHint" style="margin-top:0"></span>
+      </div>
+      <div class="busy-overlay" id="busy">检测中…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// 状态
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+let cats = [];
+let currentCategory = null;
+let stream = null;
+let camMode = false;
+let busy = false;
+let autoTimer = null;
+let lastResult = null;
+
+// 缺陷类型中英对照（与后端 DEFECT_TYPE_ZH 保持一致）
+const DEFECT_LABELS = {
+  "good": "正常",
+  "color": "颜色异常",
+  "combined": "复合缺陷",
+  "contamination": "污染",
+  "crack": "裂纹",
+  "faulty_imprint": "刻印错误",
+  "pill_type": "药品类型错误",
+  "scratch": "划痕"
+};
+function labelOf(t) { return DEFECT_LABELS[t] || "未知"; }
+
+// ---------------------------------------------------------------------------
+// 初始化
+// ---------------------------------------------------------------------------
+async function init() {
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    cats = data.categories;
+    const sel = $("category");
+    cats.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c.category; opt.textContent = c.category;
+      sel.appendChild(opt);
+    });
+    if (cats.length) {
+      const def = data.default_category && cats.find(c => c.category === data.default_category)
+        ? data.default_category : cats[0].category;
+      currentCategory = def;
+      sel.value = def;
+      const c = cats.find(x => x.category === def);
+      $("threshold").value = c.threshold != null ? c.threshold : c.default_threshold;
+      $("thresholdHint").textContent = "部署包内标定阈值: " + (c.threshold != null ? c.threshold : "无（演示默认 " + c.default_threshold + "）");
+    }
+    $("modeCamera").disabled = false;
+    $("modeUpload").disabled = false;
+    setMode(false);  // 默认进入“上传图片检测”模式
+    setStatus(true, "模型就绪：" + (data.loaded.join(", ") || "无"));
+  } catch (e) {
+    setStatus(false, "无法连接后端服务：" + e.message);
+  }
+}
+function setStatus(on, text) {
+  $("statusDot").className = "status-dot" + (on ? " on" : " err");
+  $("statusText").textContent = text;
+}
+
+// ---------------------------------------------------------------------------
+// 推理调用
+// ---------------------------------------------------------------------------
+async function detect(blob, name) {
+  if (busy) return;
+  busy = true; $("busy").style.display = "block";
+  try {
+    const fd = new FormData();
+    fd.append("file", blob, name || "frame.jpg");
+    fd.append("category", currentCategory);
+    fd.append("threshold", $("threshold").value);
+    const res = await fetch("/api/predict", { method: "POST", body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || ("HTTP " + res.status));
+    }
+    const r = await res.json();
+    lastResult = Object.assign({}, r, { _name: name || "未命名" });
+    $("reportBtn").disabled = false;
+    showResult(r);
+    addHistory(r);
+  } catch (e) {
+    setStatus(false, "推理错误：" + e.message);
+  } finally {
+    busy = false; $("busy").style.display = "none";
+  }
+}
+
+function showResult(r) {
+  $("imgSrc").src = "data:image/jpeg;base64," + r.image_b64;
+  $("imgSrc").style.display = "block";
+  $("imgVis").src = "data:image/jpeg;base64," + r.heatmap_b64;
+  $("imgVis").style.display = "block";
+  if (camMode) $("video").style.display = "none";
+
+  $("score").textContent = r.score.toFixed(4);
+  $("score").className = "v " + (r.verdict === "正常" ? "ok" : "bad");
+  $("verdict").textContent = r.verdict;
+  $("verdict").className = "v " + (r.verdict === "正常" ? "ok" : "bad");
+  $("latency").textContent = r.ms.toFixed(0) + " ms";
+
+  const badge = $("badge");
+  badge.textContent = r.verdict;
+  badge.className = "result-badge " + (r.verdict === "正常" ? "badge-ok" : "badge-bad");
+  badge.style.display = "block";
+
+  // 缺陷类型（模型预测 / 启发式）—— 英文 + 中文对照
+  const dt = r.defect_type || "good";
+  $("defectType").innerHTML = '<span>' + dt + '</span> <span style="color:var(--dim);font-size:12px;font-weight:600">' + labelOf(dt) + '</span>';
+  $("defectType").className = "v" + (dt === "good" ? " ok" : " bad");
+  const src = r.defect_source || "heuristic";
+  let note = "";
+  if (dt === "good") {
+    note = "阈值内正常样本";
+  } else if (src === "model") {
+    note = "分类模型预测 · 置信 " + (r.defect_conf != null ? r.defect_conf.toFixed(2) : "—");
+  } else {
+    note = "启发式推测 · 置信 " + (r.defect_conf != null ? r.defect_conf.toFixed(2) : "—");
+  }
+  const t3 = r.defect_top3 || [];
+  if (t3.length) {
+    note += "<br>" + t3.map(t => t.cls + " " + t.prob.toFixed(2)).join(" · ");
+  }
+  $("defectNote").innerHTML = note;
+
+  // 样品尺寸
+  const s = r.size || {};
+  $("size").textContent = (s.w_px ? (s.w_px + " × " + s.h_px + " px") : "—");
+  let sn = "宽高比 " + (s.aspect != null ? s.aspect : "—");
+  if (s.w_mm) sn += " · " + s.w_mm + " × " + s.h_mm + " mm";
+  else sn += " · (未标定 mm)";
+  $("sizeNote").textContent = sn;
+}
+
+function addHistory(r) {
+  const box = $("history");
+  if (box.querySelector(".hint")) box.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = "hist-item";
+  const ts = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  item.innerHTML =
+    '<img src="data:image/jpeg;base64,' + r.heatmap_b64 + '" alt="">' +
+    '<span class="name">' + ts + " · " + r.category + (r.defect_type ? " · " + r.defect_type : "") + "</span>" +
+    '<span class="score">' + r.score.toFixed(3) + "</span>" +
+    '<span class="tag" style="background:' + (r.verdict === "正常" ? "#3fb950" : "#f85149") + '">' + r.verdict + "</span>";
+  box.prepend(item);
+  while (box.children.length > 20) box.removeChild(box.lastChild);
+}
+
+// ---------------------------------------------------------------------------
+// 摄像头
+// ---------------------------------------------------------------------------
+async function startCamera() {
+  if (stream) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 640 }, audio: false });
+    const v = $("video");
+    v.srcObject = stream;
+    v.style.display = "block";
+    $("imgSrc").style.display = "none";
+    await v.play();
+    camMode = true;
+  } catch (e) {
+    setStatus(false, "摄像头不可用：" + e.message);
+  }
+}
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  camMode = false;
+  $("video").style.display = "none";
+  stopAuto();
+}
+function snapFrame() {
+  const v = $("video");
+  if (!v || !v.videoWidth) return null;
+  const c = document.createElement("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  return new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.85));
+}
+function startAuto() {
+  stopAuto();
+  const iv = Math.max(1, parseFloat($("interval").value) || 2) * 1000;
+  autoTimer = setInterval(async () => {
+    const blob = await snapFrame();
+    if (blob) detect(blob, "cam.jpg");
+  }, iv);
+}
+function stopAuto() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+}
+
+// ---------------------------------------------------------------------------
+// 模式切换
+// ---------------------------------------------------------------------------
+function setMode(cam) {
+  camMode = cam;
+  stopAuto();
+  $("cameraBox").style.display = cam ? "block" : "none";
+  $("uploadBox").style.display = cam ? "none" : "block";
+  if (cam) {
+    $("modeCamera").classList.add("primary");
+    $("modeUpload").classList.remove("active");
+    startCamera();
+  } else {
+    $("modeCamera").classList.remove("primary");
+    $("modeUpload").classList.add("active");
+    stopCamera();
+    $("video").style.display = "none";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 事件绑定
+// ---------------------------------------------------------------------------
+$("modeCamera").onclick = () => setMode(true);
+$("modeUpload").onclick = () => setMode(false);
+$("category").onchange = () => {
+  currentCategory = $("category").value;
+  const c = cats.find(x => x.category === currentCategory);
+  if (c) {
+    $("threshold").value = c.threshold != null ? c.threshold : c.default_threshold;
+    $("thresholdHint").textContent = "部署包内标定阈值: " + (c.threshold != null ? c.threshold : "无（演示默认 " + c.default_threshold + "）");
+  }
+};
+$("autoDetect").onchange = e => e.target.checked ? startAuto() : stopAuto();
+$("snapBtn").onclick = async () => { const b = await snapFrame(); if (b) detect(b, "cam.jpg"); };
+$("pickBtn").onclick = () => $("fileInput").click();
+
+// ---------------------------------------------------------------------------
+// 导出检测报告
+// ---------------------------------------------------------------------------
+$("reportBtn").onclick = async () => {
+  if (!lastResult) return;
+  const btn = $("reportBtn");
+  const hint = $("reportHint");
+  btn.disabled = true; btn.textContent = "生成中…";
+  hint.textContent = "";
+  try {
+    const res = await fetch("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lastResult)
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const blob = await res.blob();
+    const saved = res.headers.get("X-Report-Path");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "detection_report_" + Date.now() + ".html";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    hint.textContent = saved ? ("报告已生成并存档: " + saved) : "报告已生成";
+  } catch (e) {
+    hint.textContent = "报告生成失败: " + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = "导出检测报告";
+  }
+};
+$("fileInput").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  detect(f, f.name);
+};
+// 拖拽上传
+const dh = $("dropHint");
+["dragenter", "dragover"].forEach(ev => dh.addEventListener(ev, e => { e.preventDefault(); dh.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => dh.addEventListener(ev, e => { e.preventDefault(); dh.classList.remove("drag"); }));
+dh.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith("image/")) detect(f, f.name);
+});
+
+// 关闭页面时释放摄像头
+window.addEventListener("beforeunload", stopCamera);
+
+init();
+</script>
+</body>
+</html>

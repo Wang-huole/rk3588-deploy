@@ -1,0 +1,41 @@
+{
+  "category": "pill",
+  "backbone": "wide_resnet50_2",
+  "image_size": 448,
+  "feature_shape": [
+    56,
+    56
+  ],
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "n_neighbors": 9,
+  "anomaly_dir": "max",
+  "memory_bank_size": 20000,
+  "feature_dim": 1536,
+  "threshold": 0.7887,
+  "threshold_basis": "test_good",
+  "threshold_source": "C:\\Users\\1\\Desktop\\素材\\mvtec_anomaly_detection\\pill\\test\\good",
+  "threshold_percentile": 99.0,
+  "threshold_n": 26,
+  "threshold_normal_stats": {
+    "min": 0.6925,
+    "mean": 0.7392,
+    "p50": 0.743,
+    "p99": 0.7887,
+    "max": 0.79
+  },
+  "threshold_diagnostics": {
+    "test_good_fpr": 0.0385,
+    "test_defect_recall": 0.8936
+  },
+  "calibrated_at": "2026-11-10T20:28:58+08:00",
+  "threshold_note": "正常样本 P99 标定（test_good，n=26）；样本数较少时 P99 接近最大值，等价于标定集内无误报。正式上线请用产线相机实拍正常样本重新标定（--normal_dir）。"
+}

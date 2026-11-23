@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ipynb_checkpoints/
+
+# 训练/推理产物（体积大，可由源码重新生成）
+outputs/
+*.pt
+*.pth
+*.npy
+
+# 部署包二进制（保留 config.json 以便阈值变更可追溯）
+deploy/*/backbone.onnx
+deploy/*/backbone.onnx.data
+deploy/*/memory_bank.npy
+deploy/*/*.engine
+*.onnx
+*.onnx.data
+*.engine
+
+# 数据与日志
+data/
+*.log
+
+# 编辑器
+.vs/
+.idea/
+*.tar.gz
+*.tar.gz
