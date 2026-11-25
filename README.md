@@ -331,6 +331,6 @@ OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 python3 -u rknn_deploy/rknn_infer.py \
 
 ### 文档与录屏
 
-- `docs/RK3588S_PatchCore部署实验报告.docx`：完整实验报告（Word 版）
-- `docs/RK3588S_PatchCore部署实验报告.md`：仓库内直接阅读版
-- `media/board_demo.mp4`：板端部署全过程录屏（720p / 8fps 压缩版）
+- [docs/RK3588S_PatchCore部署实验报告.docx](docs/RK3588S_PatchCore部署实验报告.docx)：完整实验报告（Word 版）
+- [docs/RK3588S_PatchCore部署实验报告.md](docs/RK3588S_PatchCore部署实验报告.md)：仓库内直接阅读版
+- [media/board_demo.mp4](media/board_demo.mp4)：板端部署全过程录屏（720p / 8fps，97 分钟，Git LFS 存储）
