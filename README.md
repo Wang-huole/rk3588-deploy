@@ -275,3 +275,62 @@ C:\Users\1\anaconda3\envs\2401A-torch-base\python.exe -m src.train_classifier --
   本机当前未安装 tensorrt，默认走 ONNX Runtime CPU。
 - **改了阈值怎么生效**：`calibrate.py` 写回 `deploy/<category>/config.json`，
   `deploy_infer.py`、`demo.py`、`web_app.py` 都会读取；命令行 `--threshold` 可临时覆盖。
+
+## RK3588S 板端部署（RKNPU2）
+
+NanoPi-M6（Rockchip RK3588S，6 TOPS INT8 NPU）上的实测部署：ONNX 模型经 rknn-toolkit2 编译为 FP16 RKNN，
+骨干跑 NPU，memory bank 近邻检索走 CPU 多线程。
+
+### 板端环境
+
+| 项 | 版本 / 配置 |
+|---|---|
+| 开发板 | NanoPi-M6（RK3588S，4×Cortex-A76 + 4×Cortex-A55，Mali-G610） |
+| 系统 | Ubuntu 20.04 LTS aarch64，Python 3.8 |
+| 模型转换 | rknn-toolkit2 2.3.2 |
+| 板端推理 | rknn-toolkit-lite2 2.5.0 + librknnrt 2.5.0（RKNN Driver 0.9.8） |
+
+### 转换与推理
+
+```bash
+# ONNX -> RKNN（FP16），产物在 rknn_deploy/rknn/<category>/backbone_fp16.rknn
+python3 rknn_deploy/onnx2rknn.py --category toothbrush
+python3 rknn_deploy/onnx2rknn.py --category pill
+
+# 批量推理（60 张 toothbrush 正常样本）
+OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 python3 -u rknn_deploy/rknn_infer.py \
+  --category toothbrush --input ~/test_images/normal --model backbone_fp16.rknn
+```
+
+> rknn-toolkit2 2.3.2 的三个坑已在 `rknn_deploy/onnx2rknn.py` 中修好：
+> `quantized_dtype` 必须是 `w16a16i`（不是 `w16a16`）；导出接口是 `export_rknn`（不是 `export_rknn_model`）；
+> FP16 模式要删掉 `quantized_hybrid` 键。
+
+### 实测数据
+
+精度复核（toothbrush，60 张 train/good，全量 bank 18816×1536）：
+
+| 指标 | 数值 |
+|---|---|
+| 正常样本分数范围 | 0.5973 ~ 0.6569 |
+| 均值 / P99 | 0.6161 / 0.6565 |
+| 原标定阈值 | 0.8429（余量 0.186，板端无需重标） |
+| FP16 与 FP32 对照 | 同一测试图分数均为 1.0103，量化无损 |
+
+性能实测：
+
+| 配置 | 骨干 | KNN | 整帧 | FPS |
+|---|---|---|---|---|
+| ONNX FP32（CPU，25% bank） | 1351 ms | 1210 ms | 2577 ms | 0.39 |
+| RKNN FP16（25% bank，单线程） | 489 ms | 4518 ms | 5029 ms | 0.20 |
+| RKNN FP16（25% bank，4 线程） | 约 470 ms | 1232 ms | 1691 ms | 0.59 |
+| RKNN FP16（全量 bank，4 线程） | 440~500 ms | 2666~2776 ms | 3160~3270 ms | 0.31 |
+
+> 瓶颈在 CPU 端 KNN 检索（占整帧 81%~85%），骨干加速 2.9 倍但整帧只提升 1.6 倍；
+> 压缩 bank 比换算力更有效，INT8 对本场景仅省约 0.2 s，收益有限。
+
+### 文档与录屏
+
+- `docs/RK3588S_PatchCore部署实验报告.docx`：完整实验报告（Word 版）
+- `docs/RK3588S_PatchCore部署实验报告.md`：仓库内直接阅读版
+- `media/board_demo.mp4`：板端部署全过程录屏（720p / 8fps 压缩版）
